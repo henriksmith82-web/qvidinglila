@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Laggenerator - Matchvy med AI Coach</title>
+    <title>Laggenerator - Matchvy</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #f3f4f6; font-family: 'Segoe UI', sans-serif; }
@@ -28,19 +28,6 @@
             border-radius: 4px;
             text-transform: uppercase;
         }
-
-        /* AI Loading Animation */
-        .loader {
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #3b82f6;
-            border-radius: 50%;
-            width: 20px;
-            height: 20px;
-            animation: spin 1s linear infinite;
-            display: inline-block;
-            vertical-align: middle;
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body class="p-2 md:p-8">
@@ -53,12 +40,13 @@
                 <p class="text-gray-600">Planera matchen och spara statistik</p>
             </header>
 
-            <!-- Google Sheets URL -->
+            <!-- Google Sheets URL (Nu förinställd) -->
             <div class="card p-4 mb-6 bg-blue-50 border border-blue-100">
                 <details>
                     <summary class="cursor-pointer text-sm font-medium text-blue-800 uppercase tracking-wide">Inställningar för Google Sheets</summary>
                     <div class="mt-3">
-                        <input type="text" id="sheets-url" placeholder="URL till Google Script..." class="w-full p-2 text-sm border rounded shadow-sm">
+                        <p class="text-xs text-gray-500 mb-2">Data skickas till: https://docs.google.com/spreadsheets/d/1sLsBZCsqAozqrOTMjeo3_HYKmOFKVmI5TR7spBRhPto/edit</p>
+                        <input type="text" id="sheets-url" placeholder="https://script.google.com/macros/s/.../exec" class="w-full p-2 text-sm border rounded shadow-sm">
                     </div>
                 </details>
             </div>
@@ -81,18 +69,10 @@
 
             <div id="error-msg" class="hidden mb-6 p-4 bg-red-100 text-red-700 rounded-lg text-center border border-red-200"></div>
 
-            <!-- Förhandsgranskning innan godkännande -->
+            <!-- Förhandsgranskning -->
             <div id="preview-area" class="hidden space-y-4 mb-12">
                 <div class="flex justify-between items-center">
                     <h3 class="font-bold text-gray-500 uppercase text-sm tracking-widest">Förhandsgranskning</h3>
-                    <!-- Gemini AI Coach Button -->
-                    <button id="ai-coach-btn" class="bg-purple-100 hover:bg-purple-200 text-purple-700 px-3 py-1 rounded-full text-xs font-bold border border-purple-200 transition flex items-center gap-1">
-                        ✨ Analysera uppställning ✨
-                    </button>
-                </div>
-
-                <div id="ai-feedback" class="hidden card p-4 bg-purple-50 border border-purple-100 text-sm text-purple-900 italic">
-                    <!-- AI response goes here -->
                 </div>
 
                 <div id="preview-content" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div>
@@ -102,12 +82,12 @@
                     <button id="approve-btn" class="w-full sm:w-80 bg-green-600 hover:bg-green-700 text-white font-black py-4 rounded-xl shadow-xl transition active:scale-95">
                         GODKÄNN & STARTA MATCH
                     </button>
-                    <p id="save-status" class="mt-2 text-xs font-bold h-4"></p>
+                    <p id="save-status" class="mt-2 text-xs font-bold h-4 text-center"></p>
                 </div>
             </div>
         </div>
 
-        <!-- MATCHVYN (MOBILANPASSAD) -->
+        <!-- MATCHVYN -->
         <div id="match-view" class="animate-fade-in pb-20">
             <div class="flex justify-between items-center mb-6 px-2">
                 <button id="back-to-setup" class="text-blue-600 font-bold text-sm flex items-center bg-white px-3 py-2 rounded-lg shadow-sm border">
@@ -119,45 +99,18 @@
                 </div>
             </div>
 
-            <div class="space-y-8">
-                <!-- Period 1 -->
-                <div class="card overflow-hidden border-l-8 border-blue-500">
-                    <div class="bg-blue-500 p-3 text-white flex justify-between items-center">
-                        <span class="font-black text-lg">PERIOD 1</span>
-                        <span class="text-xs opacity-80 uppercase font-bold tracking-widest">Startfemman</span>
-                    </div>
-                    <div id="mv-p1" class="divide-y divide-gray-100"></div>
-                </div>
-
-                <!-- Period 2 -->
-                <div class="card overflow-hidden border-l-8 border-green-500">
-                    <div class="bg-green-500 p-3 text-white flex justify-between items-center">
-                        <span class="font-black text-lg">PERIOD 2</span>
-                        <span class="text-xs opacity-80 uppercase font-bold tracking-widest">Startfemman</span>
-                    </div>
-                    <div id="mv-p2" class="divide-y divide-gray-100"></div>
-                </div>
-
-                <!-- Period 3 -->
-                <div class="card overflow-hidden border-l-8 border-orange-500">
-                    <div class="bg-orange-500 p-3 text-white flex justify-between items-center">
-                        <span class="font-black text-lg">PERIOD 3</span>
-                        <span class="text-xs opacity-80 uppercase font-bold tracking-widest">Startfemman</span>
-                    </div>
-                    <div id="mv-p3" class="divide-y divide-gray-100"></div>
-                </div>
-            </div>
+            <div id="match-periods-container" class="space-y-8"></div>
             
             <div class="mt-10 text-center">
-                <p class="text-gray-400 text-xs italic">Data sparad till kalkylark och statistik uppdaterad.</p>
+                <p class="text-gray-400 text-xs italic">All data sparas automatiskt i molnet.</p>
             </div>
         </div>
     </div>
 
     <script>
-        // Gemini API Configuration
-        const apiKey = ""; // Provided by environment
-        const modelName = "gemini-2.5-flash-preview-09-2025";
+        // --- KONFIGURATION ---
+        // Din personliga länk till kalkylarkets skript:
+        const DEFAULT_SHEETS_URL = "https://script.google.com/macros/s/AKfycbwlv3r6bY_m4Xm7dsxlLYO0H9LsBvjfZ2VjpfADXZTphihzkxruEI_1889Rlf_ecaIBTA/exec"; 
 
         const initialPlayers = ["Villemin", "Sanna", "Thea", "Maja", "Mila", "Ofelia", "Nejla", "Laura", "Ilse", "Ines", "Inlånad spelare"];
         let posHistory = JSON.parse(localStorage.getItem('hockey_pos_v3')) || {};
@@ -168,8 +121,6 @@
         const sheetsUrlInput = document.getElementById('sheets-url');
         const generateBtn = document.getElementById('generate-btn');
         const approveBtn = document.getElementById('approve-btn');
-        const aiCoachBtn = document.getElementById('ai-coach-btn');
-        const aiFeedback = document.getElementById('ai-feedback');
         const clearHistoryBtn = document.getElementById('clear-history-btn');
         const previewArea = document.getElementById('preview-area');
         const setupContainer = document.getElementById('setup-container');
@@ -177,7 +128,8 @@
         const errorMsg = document.getElementById('error-msg');
         const saveStatus = document.getElementById('save-status');
         
-        sheetsUrlInput.value = localStorage.getItem('google_sheets_url') || '';
+        // Prioritera den förinställda länken
+        sheetsUrlInput.value = DEFAULT_SHEETS_URL;
 
         function safeId(name) { return name.replace(/\s+/g, '_'); }
 
@@ -226,63 +178,26 @@
             });
         }
 
-        async function callGemini(prompt, systemPrompt) {
-            const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
-            const payload = {
-                contents: [{ parts: [{ text: prompt }] }],
-                systemInstruction: { parts: [{ text: systemPrompt }] },
-                tools: [{ "google_search": {} }]
-            };
-
-            let retries = 5;
-            let delay = 1000;
-
-            while (retries > 0) {
-                try {
-                    const response = await fetch(endpoint, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
-                    const data = await response.json();
-                    return data.candidates?.[0]?.content?.parts?.[0]?.text;
-                } catch (error) {
-                    retries--;
-                    if (retries === 0) throw error;
-                    await new Promise(res => setTimeout(res, delay));
-                    delay *= 2;
-                }
-            }
-        }
-
-        aiCoachBtn.addEventListener('click', async () => {
-            if (!currentMatchData) return;
-
-            aiFeedback.classList.remove('hidden');
-            aiFeedback.innerHTML = `<div class="flex items-center gap-2"><div class="loader"></div> <span>AI Coachen tänker...</span></div>`;
-
-            const matchSummary = currentMatchData.perioder.map((p, i) => {
-                return `Period ${i+1}: MV: ${p.start.find(s=>s.role==='Målvakt').name}, Backar: ${p.start.filter(s=>s.role==='Back').map(s=>s.name).join(', ')}, Mittfält: ${p.start.find(s=>s.role==='Mittfält').name}, Anfall: ${p.start.find(s=>s.role==='Anfallare').name}`;
-            }).join('\n');
-
-            const systemPrompt = "Du är en erfaren barn- och ungdomshockeytränare. Ditt jobb är att ge korta, peppande och taktiska råd baserat på laguppställningar. Fokusera på lagsammanhållning, rotation och glädje. Svara på svenska.";
-            const userPrompt = `Här är laguppställningarna för tre perioder:\n${matchSummary}\nGe en snabb analys av balansen i laget och tre korta tips till tränaren inför matchen. Använd sökning om du vill hitta de senaste råden för smålagshockey.`;
-
-            try {
-                const response = await callGemini(userPrompt, systemPrompt);
-                aiFeedback.innerHTML = `<strong>✨ Coach Gemini säger:</strong><br>${response.replace(/\n/g, '<br>')}`;
-            } catch (error) {
-                aiFeedback.innerHTML = "Kunde inte nå AI Coachen just nu. Försök igen om en stund!";
-            }
-        });
-
         async function saveToSheets(matchData) {
             const url = sheetsUrlInput.value;
             if (!url) return;
-            localStorage.setItem('google_sheets_url', url);
+            saveStatus.innerText = "Sparar i kalkylark...";
+            saveStatus.className = "mt-2 text-xs font-bold h-4 text-blue-600";
+            
             try {
-                await fetch(url, { method: 'POST', mode: 'no-cors', body: JSON.stringify(matchData) });
-            } catch (e) { console.error("Sheets save error", e); }
+                await fetch(url, { 
+                    method: 'POST', 
+                    mode: 'no-cors', 
+                    cache: 'no-cache',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(matchData) 
+                });
+                saveStatus.innerText = "KLART! All data skickad.";
+                saveStatus.className = "mt-2 text-xs font-bold h-4 text-green-600";
+            } catch (e) { 
+                saveStatus.innerText = "Kunde inte spara till Sheets.";
+                saveStatus.className = "mt-2 text-xs font-bold h-4 text-red-600";
+            }
         }
 
         function generatePeriod(selected, mvCandidates, usedAsGkInMatch) {
@@ -318,7 +233,7 @@
 
             errorMsg.classList.add('hidden');
             previewArea.classList.remove('hidden');
-            aiFeedback.classList.add('hidden'); // Hide AI feedback when re-generating
+            saveStatus.innerText = "";
             
             const periods = [];
             const usedAsGk = [];
@@ -327,14 +242,13 @@
                 periods.push(pData); usedAsGk.push(pData.gk);
             }
 
-            currentMatchData = { datum: new Date().toLocaleDateString('sv-SE'), perioder: periods };
+            currentMatchData = { datum: new Date().toLocaleString('sv-SE'), perioder: periods };
             
-            // Rendera förhandsgranskning
             const prevCont = document.getElementById('preview-content');
             prevCont.innerHTML = '';
             periods.forEach((p, i) => {
-                let html = `<div class="p-3 border rounded bg-gray-50"><h4 class="font-bold text-xs mb-2">P${i+1}</h4><div class="space-y-1">`;
-                p.start.forEach(a => html += `<div class="text-[10px] flex justify-between"><span>${a.name}</span><span class="text-gray-400 uppercase">${a.role}</span></div>`);
+                let html = `<div class="p-3 border rounded bg-gray-50"><h4 class="font-bold text-xs mb-2 text-blue-600">P${i+1}</h4><div class="space-y-1">`;
+                p.start.forEach(a => html += `<div class="text-[10px] flex justify-between"><span>${a.name}</span><span class="text-gray-400 uppercase font-bold">${a.role}</span></div>`);
                 html += `</div></div>`;
                 prevCont.innerHTML += html;
             });
@@ -344,7 +258,6 @@
         approveBtn.addEventListener('click', () => {
             if (!currentMatchData) return;
             
-            // Uppdatera lokal historik
             currentMatchData.perioder.forEach(p => {
                 p.start.forEach(a => {
                     if (!posHistory[a.name]) posHistory[a.name] = {};
@@ -356,27 +269,41 @@
             
             saveToSheets(currentMatchData);
             
-            // Rendera matchvyn
             document.getElementById('match-date').innerText = currentMatchData.datum;
-            [1, 2, 3].forEach(idx => {
-                const p = currentMatchData.perioder[idx-1];
-                const cont = document.getElementById(`mv-p${idx}`);
-                cont.innerHTML = '';
+            const matchCont = document.getElementById('match-periods-container');
+            matchCont.innerHTML = '';
+
+            const colors = ["border-blue-500", "border-green-500", "border-orange-500"];
+            const bgColors = ["bg-blue-500", "bg-green-500", "bg-orange-500"];
+
+            currentMatchData.perioder.forEach((p, idx) => {
+                let pBlock = `
+                    <div class="card overflow-hidden border-l-8 ${colors[idx]}">
+                        <div class="${bgColors[idx]} p-3 text-white flex justify-between items-center">
+                            <span class="font-black text-lg">PERIOD ${idx+1}</span>
+                            <span class="text-xs opacity-80 uppercase font-bold tracking-widest">Startfemman</span>
+                        </div>
+                        <div class="divide-y divide-gray-100">
+                `;
                 
                 p.start.forEach(a => {
-                    cont.innerHTML += `
+                    pBlock += `
                         <div class="flex items-center justify-between p-4">
                             <span class="font-bold text-gray-800 text-lg">${a.name}</span>
                             <span class="role-badge ${a.color}">${a.role}</span>
                         </div>
                     `;
                 });
-                cont.innerHTML += `
-                    <div class="p-3 bg-gray-50 flex items-start gap-2">
-                        <span class="text-[10px] font-black text-gray-400 mt-1 uppercase">Bänk:</span>
-                        <span class="text-sm text-gray-500 font-medium">${p.subs.join(', ')}</span>
+                
+                pBlock += `
+                        </div>
+                        <div class="p-3 bg-gray-50 flex items-start gap-2 border-t">
+                            <span class="text-[10px] font-black text-gray-400 mt-1 uppercase">Bänk:</span>
+                            <span class="text-sm text-gray-500 font-medium">${p.subs.join(', ')}</span>
+                        </div>
                     </div>
                 `;
+                matchCont.innerHTML += pBlock;
             });
 
             document.body.classList.add('match-mode-active');
