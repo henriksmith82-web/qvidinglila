@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Laggenerator - Matchvy med AI Coach</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #f3f4f6; font-family: 'Segoe UI', sans-serif; }
+        .card { background: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+        .period-card { border-top: 6px solid #3b82f6; }
+        .mv-toggle { transition: all 0.2s; }
+        .mv-active { background-color: #fef3c7; border-color: #f59e0b; color: #b45309; border-width: 2px; }
+        .player-row:hover { background-color: #f9fafb; }
+        .checkbox-custom:checked + span { color: #2563eb; font-weight: bold; }
+        
+        /* Matchläge-specifik design */
+        .match-mode-active #setup-container { display: none; }
+        .match-mode-active #match-view { display: block; }
+        #match-view { display: none; }
+        
+        .role-badge { 
+            width: 80px; 
+            text-align: center; 
+            font-size: 0.7rem; 
+            font-weight: 900; 
+            padding: 2px 4px; 
+            border-radius: 4px;
+            text-transform: uppercase;
+        }
+
+        /* AI Loading Animation */
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            vertical-align: middle;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="p-2 md:p-8">
+    <div class="max-w-5xl mx-auto">
+        
+        <!-- INSTÄLLNINGAR & GENERERING -->
+        <div id="setup-container">
+            <header class="text-center mb-6">
+                <h1 class="text-3xl font-bold text-blue-900">Matchgenerator Pro</h1>
+                <p class="text-gray-600">Planera matchen och spara statistik</p>
+            </header>
+
+            <!-- Google Sheets URL -->
+            <div class="card p-4 mb-6 bg-blue-50 border border-blue-100">
+                <details>
+                    <summary class="cursor-pointer text-sm font-medium text-blue-800 uppercase tracking-wide">Inställningar för Google Sheets</summary>
+                    <div class="mt-3">
+                        <input type="text" id="sheets-url" placeholder="URL till Google Script..." class="w-full p-2 text-sm border rounded shadow-sm">
+                    </div>
+                </details>
+            </div>
+
+            <!-- Spelarlista -->
+            <div class="card p-4 mb-6">
+                <div class="flex justify-between items-center mb-4 border-b pb-2">
+                    <h2 class="text-lg font-bold text-gray-800 uppercase">Spelartrupp</h2>
+                    <button id="clear-history-btn" class="text-[10px] text-gray-400 hover:text-red-500 uppercase tracking-tighter">Rensa historik</button>
+                </div>
+                
+                <div id="player-list" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2"></div>
+                
+                <div class="mt-6">
+                    <button id="generate-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-xl shadow-lg transition active:scale-95 text-lg">
+                        SLUMPA LAGEN
+                    </button>
+                </div>
+            </div>
+
+            <div id="error-msg" class="hidden mb-6 p-4 bg-red-100 text-red-700 rounded-lg text-center border border-red-200"></div>
+
+            <!-- Förhandsgranskning innan godkännande -->
+            <div id="preview-area" class="hidden space-y-4 mb-12">
+                <div class="flex justify-between items-center">
+                    <h3 class="font-bold text-gray-500 uppercase text-sm tracking-widest">Förhandsgranskning</h3>
+                    <!-- Gemini AI Coach Button -->
+                    <button id="ai-coach-btn" class="bg-purple-100 hover:bg-purple-200 text-purple-700 px-3 py-1 rounded-full text-xs font-bold border border-purple-200 transition flex items-center gap-1">
+                        ✨ Analysera uppställning ✨
+                    </button>
+                </div>
+
+                <div id="ai-feedback" class="hidden card p-4 bg-purple-50 border border-purple-100 text-sm text-purple-900 italic">
+                    <!-- AI response goes here -->
+                </div>
+
+                <div id="preview-content" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div>
+                
+                <div class="card p-6 bg-green-50 border-2 border-green-200 flex flex-col items-center">
+                    <p class="text-sm text-green-800 mb-4 font-medium text-center">Nöjd? Klicka nedan för att spara till Sheets och öppna mobilvyn!</p>
+                    <button id="approve-btn" class="w-full sm:w-80 bg-green-600 hover:bg-green-700 text-white font-black py-4 rounded-xl shadow-xl transition active:scale-95">
+                        GODKÄNN & STARTA MATCH
+                    </button>
+                    <p id="save-status" class="mt-2 text-xs font-bold h-4"></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- MATCHVYN (MOBILANPASSAD) -->
+        <div id="match-view" class="animate-fade-in pb-20">
+            <div class="flex justify-between items-center mb-6 px-2">
+                <button id="back-to-setup" class="text-blue-600 font-bold text-sm flex items-center bg-white px-3 py-2 rounded-lg shadow-sm border">
+                    ← Ändra trupp
+                </button>
+                <div class="text-right">
+                    <h2 class="text-xl font-black text-blue-900 leading-none">MATCHLÄGE</h2>
+                    <span id="match-date" class="text-xs text-gray-500"></span>
+                </div>
+            </div>
+
+            <div class="space-y-8">
+                <!-- Period 1 -->
+                <div class="card overflow-hidden border-l-8 border-blue-500">
+                    <div class="bg-blue-500 p-3 text-white flex justify-between items-center">
+                        <span class="font-black text-lg">PERIOD 1</span>
+                        <span class="text-xs opacity-80 uppercase font-bold tracking-widest">Startfemman</span>
+                    </div>
+                    <div id="mv-p1" class="divide-y divide-gray-100"></div>
+                </div>
+
+                <!-- Period 2 -->
+                <div class="card overflow-hidden border-l-8 border-green-500">
+                    <div class="bg-green-500 p-3 text-white flex justify-between items-center">
+                        <span class="font-black text-lg">PERIOD 2</span>
+                        <span class="text-xs opacity-80 uppercase font-bold tracking-widest">Startfemman</span>
+                    </div>
+                    <div id="mv-p2" class="divide-y divide-gray-100"></div>
+                </div>
+
+                <!-- Period 3 -->
+                <div class="card overflow-hidden border-l-8 border-orange-500">
+                    <div class="bg-orange-500 p-3 text-white flex justify-between items-center">
+                        <span class="font-black text-lg">PERIOD 3</span>
+                        <span class="text-xs opacity-80 uppercase font-bold tracking-widest">Startfemman</span>
+                    </div>
+                    <div id="mv-p3" class="divide-y divide-gray-100"></div>
+                </div>
+            </div>
+            
+            <div class="mt-10 text-center">
+                <p class="text-gray-400 text-xs italic">Data sparad till kalkylark och statistik uppdaterad.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Gemini API Configuration
+        const apiKey = ""; // Provided by environment
+        const modelName = "gemini-2.5-flash-preview-09-2025";
+
+        const initialPlayers = ["Villemin", "Sanna", "Thea", "Maja", "Mila", "Ofelia", "Nejla", "Laura", "Ilse", "Ines", "Inlånad spelare"];
+        let posHistory = JSON.parse(localStorage.getItem('hockey_pos_v3')) || {};
+        const mvStatus = {}; 
+        let currentMatchData = null;
+
+        const playerListContainer = document.getElementById('player-list');
+        const sheetsUrlInput = document.getElementById('sheets-url');
+        const generateBtn = document.getElementById('generate-btn');
+        const approveBtn = document.getElementById('approve-btn');
+        const aiCoachBtn = document.getElementById('ai-coach-btn');
+        const aiFeedback = document.getElementById('ai-feedback');
+        const clearHistoryBtn = document.getElementById('clear-history-btn');
+        const previewArea = document.getElementById('preview-area');
+        const setupContainer = document.getElementById('setup-container');
+        const matchView = document.getElementById('match-view');
+        const errorMsg = document.getElementById('error-msg');
+        const saveStatus = document.getElementById('save-status');
+        
+        sheetsUrlInput.value = localStorage.getItem('google_sheets_url') || '';
+
+        function safeId(name) { return name.replace(/\s+/g, '_'); }
+
+        function initPlayerList() {
+            playerListContainer.innerHTML = '';
+            initialPlayers.forEach(name => {
+                const sId = safeId(name);
+                const div = document.createElement('div');
+                div.className = "player-row flex items-center justify-between p-3 border rounded-lg transition bg-white shadow-sm";
+                div.innerHTML = `
+                    <label class="flex items-center grow cursor-pointer select-none">
+                        <input type="checkbox" id="check-${sId}" value="${name}" class="checkbox-custom w-5 h-5 text-blue-600 rounded mr-3">
+                        <span class="text-gray-700 font-medium">${name}</span>
+                    </label>
+                    <button type="button" id="mv-btn-${sId}" class="mv-toggle ml-2 px-3 py-1 text-[10px] font-black rounded-md border border-gray-200 text-gray-400 bg-gray-50 uppercase">MV?</button>
+                `;
+                playerListContainer.appendChild(div);
+                div.querySelector(`#mv-btn-${sId}`).addEventListener('click', (e) => {
+                    e.preventDefault(); e.stopPropagation();
+                    toggleMV(name, sId);
+                });
+            });
+        }
+
+        function toggleMV(name, sId) {
+            const btn = document.getElementById(`mv-btn-${sId}`);
+            mvStatus[name] = !mvStatus[name];
+            if(mvStatus[name]) {
+                btn.classList.add('mv-active'); btn.innerText = 'VILL MV';
+                document.getElementById(`check-${sId}`).checked = true;
+            } else {
+                btn.classList.remove('mv-active'); btn.innerText = 'MV?';
+            }
+        }
+
+        function getWeightedRandom(pool, role, mvCandidates = []) {
+            let candidates = [...pool];
+            if (role === 'Målvakt' && mvCandidates.length > 0) {
+                const availableVillinga = candidates.filter(p => mvCandidates.includes(p));
+                if (availableVillinga.length > 0) candidates = availableVillinga;
+            }
+            return candidates.sort((a, b) => {
+                const countA = (posHistory[a]?.[role]) || 0;
+                const countB = (posHistory[b]?.[role]) || 0;
+                return (countA - countB) + (Math.random() * 2 - 1);
+            });
+        }
+
+        async function callGemini(prompt, systemPrompt) {
+            const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                tools: [{ "google_search": {} }]
+            };
+
+            let retries = 5;
+            let delay = 1000;
+
+            while (retries > 0) {
+                try {
+                    const response = await fetch(endpoint, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const data = await response.json();
+                    return data.candidates?.[0]?.content?.parts?.[0]?.text;
+                } catch (error) {
+                    retries--;
+                    if (retries === 0) throw error;
+                    await new Promise(res => setTimeout(res, delay));
+                    delay *= 2;
+                }
+            }
+        }
+
+        aiCoachBtn.addEventListener('click', async () => {
+            if (!currentMatchData) return;
+
+            aiFeedback.classList.remove('hidden');
+            aiFeedback.innerHTML = `<div class="flex items-center gap-2"><div class="loader"></div> <span>AI Coachen tänker...</span></div>`;
+
+            const matchSummary = currentMatchData.perioder.map((p, i) => {
+                return `Period ${i+1}: MV: ${p.start.find(s=>s.role==='Målvakt').name}, Backar: ${p.start.filter(s=>s.role==='Back').map(s=>s.name).join(', ')}, Mittfält: ${p.start.find(s=>s.role==='Mittfält').name}, Anfall: ${p.start.find(s=>s.role==='Anfallare').name}`;
+            }).join('\n');
+
+            const systemPrompt = "Du är en erfaren barn- och ungdomshockeytränare. Ditt jobb är att ge korta, peppande och taktiska råd baserat på laguppställningar. Fokusera på lagsammanhållning, rotation och glädje. Svara på svenska.";
+            const userPrompt = `Här är laguppställningarna för tre perioder:\n${matchSummary}\nGe en snabb analys av balansen i laget och tre korta tips till tränaren inför matchen. Använd sökning om du vill hitta de senaste råden för smålagshockey.`;
+
+            try {
+                const response = await callGemini(userPrompt, systemPrompt);
+                aiFeedback.innerHTML = `<strong>✨ Coach Gemini säger:</strong><br>${response.replace(/\n/g, '<br>')}`;
+            } catch (error) {
+                aiFeedback.innerHTML = "Kunde inte nå AI Coachen just nu. Försök igen om en stund!";
+            }
+        });
+
+        async function saveToSheets(matchData) {
+            const url = sheetsUrlInput.value;
+            if (!url) return;
+            localStorage.setItem('google_sheets_url', url);
+            try {
+                await fetch(url, { method: 'POST', mode: 'no-cors', body: JSON.stringify(matchData) });
+            } catch (e) { console.error("Sheets save error", e); }
+        }
+
+        function generatePeriod(selected, mvCandidates, usedAsGkInMatch) {
+            let pool = [...selected].sort(() => Math.random() - 0.5);
+            const periodRoles = [];
+            let gkPoolCandidates = pool.filter(p => !usedAsGkInMatch.includes(p));
+            if (gkPoolCandidates.length === 0) gkPoolCandidates = pool;
+            const gk = getWeightedRandom(gkPoolCandidates, 'Målvakt', mvCandidates)[0];
+            periodRoles.push({ name: gk, role: 'Målvakt', color: 'bg-yellow-100 text-yellow-800' });
+            pool = pool.filter(p => p !== gk);
+            
+            const d1 = getWeightedRandom(pool, 'Back')[0]; pool = pool.filter(p => p !== d1);
+            const d2 = getWeightedRandom(pool, 'Back')[0]; pool = pool.filter(p => p !== d2);
+            periodRoles.push({ name: d1, role: 'Back', color: 'bg-blue-100 text-blue-800' }, { name: d2, role: 'Back', color: 'bg-blue-100 text-blue-800' });
+            
+            const mid = getWeightedRandom(pool, 'Mittfält')[0]; pool = pool.filter(p => p !== mid);
+            periodRoles.push({ name: mid, role: 'Mittfält', color: 'bg-green-100 text-green-800' });
+            
+            const fwd = getWeightedRandom(pool, 'Anfallare')[0]; pool = pool.filter(p => p !== fwd);
+            periodRoles.push({ name: fwd, role: 'Anfallare', color: 'bg-red-100 text-red-800' });
+
+            return { start: periodRoles, subs: pool, gk: gk };
+        }
+
+        generateBtn.addEventListener('click', () => {
+            const selected = Array.from(document.querySelectorAll('#player-list input:checked')).map(cb => cb.value);
+            const activeMvCandidates = Object.keys(mvStatus).filter(name => mvStatus[name] && selected.includes(name));
+
+            if (selected.length < 5) {
+                errorMsg.innerText = "Välj minst 5 spelare!"; errorMsg.classList.remove('hidden');
+                return;
+            }
+
+            errorMsg.classList.add('hidden');
+            previewArea.classList.remove('hidden');
+            aiFeedback.classList.add('hidden'); // Hide AI feedback when re-generating
+            
+            const periods = [];
+            const usedAsGk = [];
+            for(let i=0; i<3; i++) {
+                const pData = generatePeriod(selected, activeMvCandidates, usedAsGk);
+                periods.push(pData); usedAsGk.push(pData.gk);
+            }
+
+            currentMatchData = { datum: new Date().toLocaleDateString('sv-SE'), perioder: periods };
+            
+            // Rendera förhandsgranskning
+            const prevCont = document.getElementById('preview-content');
+            prevCont.innerHTML = '';
+            periods.forEach((p, i) => {
+                let html = `<div class="p-3 border rounded bg-gray-50"><h4 class="font-bold text-xs mb-2">P${i+1}</h4><div class="space-y-1">`;
+                p.start.forEach(a => html += `<div class="text-[10px] flex justify-between"><span>${a.name}</span><span class="text-gray-400 uppercase">${a.role}</span></div>`);
+                html += `</div></div>`;
+                prevCont.innerHTML += html;
+            });
+            previewArea.scrollIntoView({ behavior: 'smooth' });
+        });
+
+        approveBtn.addEventListener('click', () => {
+            if (!currentMatchData) return;
+            
+            // Uppdatera lokal historik
+            currentMatchData.perioder.forEach(p => {
+                p.start.forEach(a => {
+                    if (!posHistory[a.name]) posHistory[a.name] = {};
+                    if (!posHistory[a.name][a.role]) posHistory[a.name][a.role] = 0;
+                    posHistory[a.name][a.role]++;
+                });
+            });
+            localStorage.setItem('hockey_pos_v3', JSON.stringify(posHistory));
+            
+            saveToSheets(currentMatchData);
+            
+            // Rendera matchvyn
+            document.getElementById('match-date').innerText = currentMatchData.datum;
+            [1, 2, 3].forEach(idx => {
+                const p = currentMatchData.perioder[idx-1];
+                const cont = document.getElementById(`mv-p${idx}`);
+                cont.innerHTML = '';
+                
+                p.start.forEach(a => {
+                    cont.innerHTML += `
+                        <div class="flex items-center justify-between p-4">
+                            <span class="font-bold text-gray-800 text-lg">${a.name}</span>
+                            <span class="role-badge ${a.color}">${a.role}</span>
+                        </div>
+                    `;
+                });
+                cont.innerHTML += `
+                    <div class="p-3 bg-gray-50 flex items-start gap-2">
+                        <span class="text-[10px] font-black text-gray-400 mt-1 uppercase">Bänk:</span>
+                        <span class="text-sm text-gray-500 font-medium">${p.subs.join(', ')}</span>
+                    </div>
+                `;
+            });
+
+            document.body.classList.add('match-mode-active');
+            window.scrollTo(0, 0);
+        });
+
+        document.getElementById('back-to-setup').addEventListener('click', () => {
+            document.body.classList.remove('match-mode-active');
+        });
+
+        clearHistoryBtn.addEventListener('click', () => {
+            if(confirm('Rensa all lokal positionsstatistik?')) {
+                posHistory = {}; localStorage.removeItem('hockey_pos_v3'); location.reload();
+            }
+        });
+
+        initPlayerList();
+    </script>
+</body>
+</html>
